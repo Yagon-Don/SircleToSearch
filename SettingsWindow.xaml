@@ -1,0 +1,70 @@
+<Window x:Class="SircleToSearch.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SircleToSearch" Height="400" Width="420"
+        ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
+        Background="#F1F3F4">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="20"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="TitleText" Grid.Row="0" FontFamily="Segoe UI Semibold" FontSize="20"
+                   Foreground="#202124" Text="SircleToSearch"/>
+
+        <TextBlock x:Name="WelcomeText" Grid.Row="1" Margin="0,8,0,0" TextWrapping="Wrap"
+                   FontFamily="Segoe UI" FontSize="13" Foreground="#5F6368"/>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal">
+            <TextBlock x:Name="LanguageLabel" VerticalAlignment="Center" Width="120"
+                       FontFamily="Segoe UI" FontSize="13" Foreground="#3C4043"/>
+            <ComboBox x:Name="LanguageCombo" Width="160" Background="White" Foreground="#3C4043"
+                      SelectionChanged="LanguageCombo_SelectionChanged">
+                <ComboBoxItem Content="English" Tag="en" Background="White" Foreground="#3C4043"/>
+                <ComboBoxItem Content="Русский" Tag="ru" Background="White" Foreground="#3C4043"/>
+            </ComboBox>
+        </StackPanel>
+
+        <CheckBox x:Name="AutostartCheck" Grid.Row="5" VerticalAlignment="Center"
+                  FontFamily="Segoe UI" FontSize="13" Foreground="#3C4043"
+                  Checked="AutostartCheck_Changed" Unchecked="AutostartCheck_Changed"/>
+
+        <TextBlock x:Name="HotkeyInfoText" Grid.Row="7" FontFamily="Segoe UI" FontSize="13" Foreground="#5F6368"/>
+
+        <StackPanel Grid.Row="9" Orientation="Horizontal">
+            <Button x:Name="GitHubButton" Padding="12,6" Margin="0,0,10,0"
+                    Background="Transparent" BorderBrush="#DADCE0" BorderThickness="1"
+                    FontFamily="Segoe UI" FontSize="12" Foreground="#3C4043" Cursor="Hand"
+                    Click="GitHubButton_Click"/>
+            <Button x:Name="AuthorButton" Padding="12,6"
+                    Background="Transparent" BorderBrush="#DADCE0" BorderThickness="1"
+                    FontFamily="Segoe UI" FontSize="12" Foreground="#3C4043" Cursor="Hand"
+                    Click="AuthorButton_Click"/>
+        </StackPanel>
+
+        <TextBlock x:Name="BySomeoneText" Grid.Row="11" VerticalAlignment="Center"
+                   HorizontalAlignment="Left" FontFamily="Segoe UI" FontSize="11" Foreground="#9AA0A6"/>
+
+        <StackPanel Grid.Row="11" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="ReportBugButton" Padding="14,7" Margin="0,0,10,0"
+                    Background="Transparent" BorderBrush="#DADCE0" BorderThickness="1"
+                    FontFamily="Segoe UI" FontSize="13" Foreground="#3C4043" Cursor="Hand"
+                    Click="ReportBugButton_Click"/>
+            <Button x:Name="CloseButton" Padding="18,7"
+                    Background="#4285F4" BorderThickness="0" Foreground="White"
+                    FontFamily="Segoe UI Semibold" FontSize="13" Cursor="Hand"
+                    Click="CloseButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
