@@ -41,7 +41,7 @@
             <!-- WebView2 is a windowed control (its own HWND) — a WPF overlay can't draw
                  on top of it while it's visible (airspace). Collapsing it while loading is
                  what lets this M3-style spinner show instead of a blank/white flash. -->
-            <Border x:Name="LoadingOverlay" Grid.Row="1" Background="#F8F9FA" CornerRadius="0,0,16,16">
+            <Border x:Name="LoadingOverlay" Grid.Row="1" Background="Transparent" CornerRadius="0,0,16,16">
                 <Grid>
                     <Ellipse Width="240" Height="240" Fill="#4285F4" Opacity="0.06">
                         <Ellipse.Effect>

@@ -4,6 +4,27 @@
         Title="SircleToSearch" Height="400" Width="420"
         ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
         Background="#F1F3F4">
+    <Window.Resources>
+        <!-- WPF's default ComboBoxItem template pulls selection/hover colors from the
+             SYSTEM theme (SystemColors.Highlight etc). On a dark-themed machine that can
+             render near-black-on-black. Force our own colors so it never depends on the
+             user's Windows theme. -->
+        <Style x:Key="LightComboBoxItem" TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#3C4043"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Style.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                    <Setter Property="Background" Value="#E8F0FE"/>
+                    <Setter Property="Foreground" Value="#1967D2"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#E8F0FE"/>
+                    <Setter Property="Foreground" Value="#1967D2"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
     <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -30,9 +51,10 @@
             <TextBlock x:Name="LanguageLabel" VerticalAlignment="Center" Width="120"
                        FontFamily="Segoe UI" FontSize="13" Foreground="#3C4043"/>
             <ComboBox x:Name="LanguageCombo" Width="160" Background="White" Foreground="#3C4043"
+                      ItemContainerStyle="{StaticResource LightComboBoxItem}"
                       SelectionChanged="LanguageCombo_SelectionChanged">
-                <ComboBoxItem Content="English" Tag="en" Background="White" Foreground="#3C4043"/>
-                <ComboBoxItem Content="Русский" Tag="ru" Background="White" Foreground="#3C4043"/>
+                <ComboBoxItem Content="English" Tag="en"/>
+                <ComboBoxItem Content="Русский" Tag="ru"/>
             </ComboBox>
         </StackPanel>
 
