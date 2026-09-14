@@ -71,15 +71,14 @@ public partial class ResultWindow : Window
     {
         _busy = true;
         SetStatus(searching: true);
-
-        // Snapshot whatever's on screen right now, BEFORE hiding the browser —
-        // this is what shows blurred behind the spinner.
-        if (_hasContent)
-            await CaptureBackdropAsync();
-        else
-            LoadingBackdrop.Source = null;
-
+        if (!_hasContent) LoadingBackdrop.Source = null; // nothing to blur yet on the very first search
         ShowLoading();
+
+        // Keep re-snapshotting the page for as long as this search is in flight, so the
+        // blur behind the spinner reflects the actual loading progress (blank -> google.com
+        // -> results painting in) instead of one frozen frame from before the request began.
+        using var captureLoopCts = new CancellationTokenSource();
+        var captureLoop = RunCaptureLoopAsync(captureLoopCts.Token);
 
         try
         {
@@ -91,6 +90,9 @@ public partial class ResultWindow : Window
         }
         finally
         {
+            captureLoopCts.Cancel();
+            await captureLoop;
+
             // No artificial minimum — the spinner shows for exactly as long as the
             // real upload+navigate takes, then fades out (see HideLoadingAsync).
             await HideLoadingAsync();
@@ -102,6 +104,24 @@ public partial class ResultWindow : Window
         {
             _pendingJpegBytes = null;
             await RunSearchAsync(pending);
+        }
+    }
+
+    private async Task RunCaptureLoopAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            if (Browser.CoreWebView2 is not null)
+                await CaptureBackdropAsync();
+
+            try
+            {
+                await Task.Delay(200, token);
+            }
+            catch (TaskCanceledException)
+            {
+                break;
+            }
         }
     }
 
@@ -120,12 +140,12 @@ public partial class ResultWindow : Window
             bitmap.EndInit();
             bitmap.Freeze();
             LoadingBackdrop.Source = bitmap;
+            _hasContent = true;
         }
-        catch (Exception ex)
+        catch
         {
-            // Purely cosmetic — a failed capture just means no blurred backdrop this time.
-            AppLog.Error("Не удалось снять превью страницы для блюра", ex);
-            LoadingBackdrop.Source = null;
+            // Purely cosmetic and runs every 200ms — a failed capture just means no
+            // fresh backdrop frame this tick, not worth logging every miss.
         }
     }
 
@@ -175,14 +195,21 @@ public partial class ResultWindow : Window
 
     private async Task NavigateToLensResultsAsync(byte[] jpegBytes)
     {
-        var userDataFolder = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SircleToSearch", "WebView2");
-        var env = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
-        await Browser.EnsureCoreWebView2Async(env);
+        // EnsureCoreWebView2Async throws if called again with a DIFFERENT
+        // CoreWebView2Environment instance — which a fresh CreateAsync() call always is.
+        // Only run this once; every re-search after the first reuses the existing
+        // CoreWebView2 the control already has.
+        if (Browser.CoreWebView2 is null)
+        {
+            var userDataFolder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "SircleToSearch", "WebView2");
+            var env = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
+            await Browser.EnsureCoreWebView2Async(env);
 
-        Browser.CoreWebView2.Settings.UserAgent = MobileUserAgent;
-        Browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+            Browser.CoreWebView2!.Settings.UserAgent = MobileUserAgent;
+            Browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+        }
 
         // Navigate to google.com first so the upload fetch below is same-origin —
         // that way the uploaded image and the results page share the exact same
@@ -247,7 +274,6 @@ public partial class ResultWindow : Window
         Browser.CoreWebView2.Navigate(resultUrl);
         await resultsLoaded.Task;
         Browser.CoreWebView2.NavigationCompleted -= OnResultsNavCompleted;
-        _hasContent = true;
     }
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
