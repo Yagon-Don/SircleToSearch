@@ -116,7 +116,7 @@ public partial class ResultWindow : Window
 
             try
             {
-                await Task.Delay(200, token);
+                await Task.Delay(600, token);
             }
             catch (TaskCanceledException)
             {
@@ -130,7 +130,10 @@ public partial class ResultWindow : Window
         try
         {
             using var stream = new MemoryStream();
-            await Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, stream);
+            // JPEG encodes much faster than PNG — this runs on the same renderer that's
+            // also busy loading the page, and a slow PNG encode every tick was measurably
+            // slowing the actual navigation down (hence the spinner "hanging" too long).
+            await Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Jpeg, stream);
             stream.Position = 0;
 
             var bitmap = new BitmapImage();
