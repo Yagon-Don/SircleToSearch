@@ -38,6 +38,8 @@ public partial class SettingsWindow : Window
         GitHubButton.Content = Strings.Get("SettingsGitHub");
         AuthorButton.Content = Strings.Get("SettingsAuthor");
         BySomeoneText.Text = Strings.Get("SettingsBySomeone");
+        VersionText.Text = Strings.Get("SettingsVersion", AppVersion.Current);
+        CheckUpdateButton.Content = Strings.Get("SettingsCheckUpdate");
     }
 
     private void LanguageCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -63,6 +65,38 @@ public partial class SettingsWindow : Window
             _loading = false;
             System.Windows.MessageBox.Show(this, Strings.Get("AutostartFailed"),
                 "SircleToSearch", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async void CheckUpdateButton_Click(object sender, RoutedEventArgs e)
+    {
+        CheckUpdateButton.IsEnabled = false;
+        UpdateStatusText.Text = Strings.Get("SettingsCheckingUpdate");
+
+        try
+        {
+            var result = await UpdateChecker.CheckAsync();
+            if (result.UpdateAvailable)
+            {
+                UpdateStatusText.Text = Strings.Get("SettingsUpdateAvailable", result.LatestVersion);
+                var downloadUrl = result.ReleaseUrl;
+                UpdateStatusText.Cursor = System.Windows.Input.Cursors.Hand;
+                UpdateStatusText.TextDecorations = TextDecorations.Underline;
+                UpdateStatusText.MouseLeftButtonDown += (_, _) => OpenUrl(downloadUrl);
+            }
+            else
+            {
+                UpdateStatusText.Text = Strings.Get("SettingsUpToDate");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Проверка обновлений не удалась", ex);
+            UpdateStatusText.Text = Strings.Get("SettingsUpdateCheckFailed");
+        }
+        finally
+        {
+            CheckUpdateButton.IsEnabled = true;
         }
     }
 
