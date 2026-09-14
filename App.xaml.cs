@@ -67,7 +67,7 @@ public partial class App : System.Windows.Application
             Icon = System.Drawing.SystemIcons.Application,
             Visible = true,
         };
-        _trayIcon.DoubleClick += (_, _) => ShowOverlay();
+        _trayIcon.DoubleClick += (_, _) => OpenSettings();
 
         RebuildTrayMenu();
     }
