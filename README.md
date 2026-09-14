@@ -13,6 +13,10 @@ Android's "Circle to Search," brought to Windows — a background tray app that 
 
 Tray icon → right-click → **Settings** to enable launch-on-startup.
 
+## Download
+
+Grab the latest `SircleToSearch.exe` from the [Releases page](https://github.com/Yagon-Don/SircleToSearch/releases/latest) — it's a single self-contained file, nothing else to install beyond the WebView2 Runtime (preinstalled on Windows 11, and on most Windows 10 machines via Edge). Run it, and it'll sit in the tray.
+
 ## Stack
 
 - .NET 8 / WPF — no Electron. Compiles to a single self-contained exe, near-zero footprint while idle.
@@ -20,14 +24,6 @@ Tray icon → right-click → **Settings** to enable launch-on-startup.
 - Screen capture via GDI (`CopyFromScreen`); cropping via a manual `Graphics.DrawImage` pass — `Bitmap.Clone(rect)` has a known GDI+ bug that corrupts pixels for some rectangles.
 - Image search via `Microsoft.Web.WebView2` — the upload itself runs *inside* the WebView2 page via `fetch()`, so the uploaded image and the results page share one cookie/session context instead of a separate HTTP client's session going out of sync with the browser control's.
 - The loading spinner is a from-scratch port of the real Material 3 shape-morphing loading indicator (shape data + spring/rotation constants), based on [Aler1x/m3-loading-indicator](https://github.com/Aler1x/m3-loading-indicator) (Apache-2.0).
-
-## Build
-
-```
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o bin/publish
-```
-
-Produces one exe at `bin/publish/SircleToSearch.exe`. Only requirement: Windows 10/11 x64 with the WebView2 Runtime (preinstalled on Windows 11, and on most Windows 10 machines via Edge).
 
 ## Not affiliated with Google
 

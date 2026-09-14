@@ -13,6 +13,10 @@
 
 Трей-иконка → ПКМ → **Настройки** — включить автозапуск с Windows.
 
+## Скачать
+
+Бери свежий `SircleToSearch.exe` со [страницы релизов](https://github.com/Yagon-Don/SircleToSearch/releases/latest) — это один самодостаточный файл, ставить больше ничего не нужно, кроме WebView2 Runtime (стоит из коробки на Win11 и почти всегда на Win10 через Edge). Запускаешь — и он сидит в трее.
+
 ## Стек
 
 - .NET 8 / WPF, без Electron — компилируется в один self-contained exe, в простое почти не потребляет ресурсы.
@@ -20,14 +24,6 @@
 - Захват экрана — GDI (`CopyFromScreen`), обрезка — ручной `Graphics.DrawImage` (у `Bitmap.Clone(rect)` из GDI+ есть баг с порчей пикселей на некоторых прямоугольниках).
 - Поиск по картинке — `Microsoft.Web.WebView2`: сам аплоад делается изнутри WebView2 через `fetch()`, чтобы избежать рассинхрона cookie-сессии между отдельным HTTP-клиентом и окном результата.
 - Спиннер загрузки — портированный с нуля настоящий Material 3 shape-morphing индикатор (данные форм + константы пружины/вращения), на основе [Aler1x/m3-loading-indicator](https://github.com/Aler1x/m3-loading-indicator) (Apache-2.0).
-
-## Сборка
-
-```
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o bin/publish
-```
-
-Результат — один exe в `bin/publish/SircleToSearch.exe`. Нужен только Windows 10/11 x64 и системный WebView2 Runtime (стоит из коробки на Win11 и почти всегда на Win10 через Edge).
 
 ## Не связано с Google
 
