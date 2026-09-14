@@ -17,6 +17,7 @@ public partial class ResultWindow : Window
     private bool _busy;
     private byte[]? _pendingJpegBytes;
     private MorphingLoader? _loader;
+    private bool _firstSearchDone;
     private const string MobileUserAgent =
         "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) " +
         "Chrome/124.0.0.0 Mobile Safari/537.36";
@@ -65,7 +66,12 @@ public partial class ResultWindow : Window
         _ = RunSearchAsync(jpegBytes);
     }
 
-    private static readonly TimeSpan MinLoadingDisplay = TimeSpan.FromMilliseconds(1500);
+    // The full 1.5s floor is for the very first search (so the spinner doesn't just
+    // flash by). Re-searches from dragging/resizing the overlay reuse an already-warm
+    // WebView2 session and can finish in a few hundred ms — holding those to 1.5s too
+    // would make every tiny adjustment feel artificially sluggish.
+    private static readonly TimeSpan FirstSearchMinDisplay = TimeSpan.FromMilliseconds(1500);
+    private static readonly TimeSpan RepeatSearchMinDisplay = TimeSpan.FromMilliseconds(400);
 
     private async Task RunSearchAsync(byte[] jpegBytes)
     {
@@ -73,6 +79,7 @@ public partial class ResultWindow : Window
         SetStatus(searching: true);
         ShowLoading();
         var startedAt = DateTime.UtcNow;
+        var minDisplay = _firstSearchDone ? RepeatSearchMinDisplay : FirstSearchMinDisplay;
 
         try
         {
@@ -84,9 +91,10 @@ public partial class ResultWindow : Window
         }
         finally
         {
+            _firstSearchDone = true;
             var elapsed = DateTime.UtcNow - startedAt;
-            if (elapsed < MinLoadingDisplay)
-                await Task.Delay(MinLoadingDisplay - elapsed);
+            if (elapsed < minDisplay)
+                await Task.Delay(minDisplay - elapsed);
 
             await HideLoadingAsync();
             _busy = false;
