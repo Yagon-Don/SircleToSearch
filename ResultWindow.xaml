@@ -41,8 +41,22 @@
             <!-- WebView2 is a windowed control (its own HWND) — a WPF overlay can't draw
                  on top of it while it's visible (airspace). Collapsing it while loading is
                  what lets this M3-style spinner show instead of a blank/white flash. -->
-            <Border x:Name="LoadingOverlay" Grid.Row="1" Background="Transparent" CornerRadius="0,0,16,16">
+            <Border x:Name="LoadingOverlay" Grid.Row="1" Background="Transparent" CornerRadius="0,0,16,16"
+                    ClipToBounds="True">
                 <Grid>
+                    <!-- Frozen frame of whatever the page looked like right before this
+                         search started (via CapturePreviewAsync) — WebView2 is a separate
+                         HWND, so a live blur-through of its current render isn't possible
+                         from WPF; a snapshot is visually identical since nothing behind
+                         the blur is actually animating during a page load anyway. Empty
+                         on the very first search, since there's nothing to have captured yet. -->
+                    <Image x:Name="LoadingBackdrop" Stretch="UniformToFill">
+                        <Image.Effect>
+                            <BlurEffect Radius="24"/>
+                        </Image.Effect>
+                    </Image>
+                    <Border Background="#B3FFFFFF"/>
+
                     <Ellipse Width="240" Height="240" Fill="#4285F4" Opacity="0.06">
                         <Ellipse.Effect>
                             <BlurEffect Radius="60"/>

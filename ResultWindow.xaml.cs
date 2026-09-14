@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
 
 namespace SircleToSearch;
@@ -17,6 +18,7 @@ public partial class ResultWindow : Window
     private bool _busy;
     private byte[]? _pendingJpegBytes;
     private MorphingLoader? _loader;
+    private bool _hasContent;
     private const string MobileUserAgent =
         "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) " +
         "Chrome/124.0.0.0 Mobile Safari/537.36";
@@ -69,6 +71,14 @@ public partial class ResultWindow : Window
     {
         _busy = true;
         SetStatus(searching: true);
+
+        // Snapshot whatever's on screen right now, BEFORE hiding the browser —
+        // this is what shows blurred behind the spinner.
+        if (_hasContent)
+            await CaptureBackdropAsync();
+        else
+            LoadingBackdrop.Source = null;
+
         ShowLoading();
 
         try
@@ -92,6 +102,30 @@ public partial class ResultWindow : Window
         {
             _pendingJpegBytes = null;
             await RunSearchAsync(pending);
+        }
+    }
+
+    private async Task CaptureBackdropAsync()
+    {
+        try
+        {
+            using var stream = new MemoryStream();
+            await Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, stream);
+            stream.Position = 0;
+
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.StreamSource = stream;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            LoadingBackdrop.Source = bitmap;
+        }
+        catch (Exception ex)
+        {
+            // Purely cosmetic — a failed capture just means no blurred backdrop this time.
+            AppLog.Error("Не удалось снять превью страницы для блюра", ex);
+            LoadingBackdrop.Source = null;
         }
     }
 
@@ -213,6 +247,7 @@ public partial class ResultWindow : Window
         Browser.CoreWebView2.Navigate(resultUrl);
         await resultsLoaded.Task;
         Browser.CoreWebView2.NavigationCompleted -= OnResultsNavCompleted;
+        _hasContent = true;
     }
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
