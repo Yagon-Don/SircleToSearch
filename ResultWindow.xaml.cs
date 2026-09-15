@@ -31,11 +31,11 @@ public partial class ResultWindow : Window
     public ResultWindow()
     {
         InitializeComponent();
-        Loaded += ResultWindow_Loaded;
-    }
 
-    private void ResultWindow_Loaded(object? sender, RoutedEventArgs e)
-    {
+        // Sized and parked off-screen BEFORE the first Show() paints a frame — doing
+        // this in Loaded instead left a visible blink: with no Width/Height/Left/Top
+        // set yet, WPF+Windows composite one frame at the OS's default placement for
+        // an unpositioned window (roughly left-of-center) before it jumps off-screen.
         Width = 460;
         var screenHeight = SystemParameters.WorkArea.Height;
         Height = Math.Min(760, screenHeight * 0.82);
@@ -53,6 +53,11 @@ public partial class ResultWindow : Window
         Left = -5000;
         Top = _targetTop;
 
+        Loaded += ResultWindow_Loaded;
+    }
+
+    private void ResultWindow_Loaded(object? sender, RoutedEventArgs e)
+    {
         _loader = new MorphingLoader(SpinnerShape, radius: 24);
     }
 
