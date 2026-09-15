@@ -1,9 +1,11 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using Microsoft.Web.WebView2.Core;
@@ -12,49 +14,73 @@ namespace SircleToSearch;
 
 public partial class ResultWindow : Window
 {
-    private byte[] _jpegBytes;
+    private byte[]? _jpegBytes;
     private bool _closing;
     private bool _busy;
+    private bool _revealed;
     private byte[]? _pendingJpegBytes;
     private MorphingLoader? _loader;
     private const string MobileUserAgent =
         "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) " +
         "Chrome/124.0.0.0 Mobile Safari/537.36";
 
-    public ResultWindow(byte[] jpegBytes)
+    public ResultWindow()
     {
         InitializeComponent();
-        _jpegBytes = jpegBytes;
         Loaded += ResultWindow_Loaded;
     }
 
-    private async void ResultWindow_Loaded(object? sender, RoutedEventArgs e)
+    private void ResultWindow_Loaded(object? sender, RoutedEventArgs e)
     {
         Width = 460;
         var screenHeight = SystemParameters.WorkArea.Height;
         Height = Math.Min(760, screenHeight * 0.82);
-
         Left = SystemParameters.WorkArea.Right - Width - 24;
-        var targetTop = SystemParameters.WorkArea.Bottom - Height;
-        Top = SystemParameters.WorkArea.Bottom;
+        Top = SystemParameters.WorkArea.Bottom - Height;
 
-        var slideUp = new DoubleAnimation(SystemParameters.WorkArea.Bottom, targetTop,
-            TimeSpan.FromMilliseconds(260))
-        {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
-        BeginAnimation(TopProperty, slideUp);
+        // Invisible until Reveal() — this window is created and shown (so its WebView2
+        // control gets a real HWND to initialize in) as soon as the overlay opens, well
+        // before the user finishes dragging a selection, so PreWarmAsync can eat the
+        // WebView2 startup + google.com navigation cost while they're still drawing.
+        Opacity = 0;
+
+        // Being invisible doesn't stop this Topmost window from swallowing clicks at its
+        // screen position — if the user's selection rectangle happens to be under this
+        // corner, they'd click the hidden window instead of the overlay beneath it.
+        // Click-through until Reveal() removes it.
+        SetClickThrough(true);
 
         _loader = new MorphingLoader(SpinnerShape, radius: 24);
-
-        Activate();
-        await RunSearchAsync(_jpegBytes);
     }
 
-    /// <summary>Re-runs the search with a new crop in this same window (drag/resize on the overlay).</summary>
-    public void UpdateSearch(byte[] jpegBytes)
+    /// <summary>
+    /// Fire-and-forget from the moment the overlay opens: gets WebView2 initialized and
+    /// sitting on google.com before the user has even finished selecting anything, so that
+    /// cost doesn't sit on the critical path once they release the mouse.
+    /// </summary>
+    public async Task PreWarmAsync()
+    {
+        try
+        {
+            await EnsureOnGoogleAsync();
+        }
+        catch (Exception ex)
+        {
+            // Not fatal — the real search will just redo this work when it runs.
+            AppLog.Error("Прогрев WebView2 не удался", ex);
+        }
+    }
+
+    /// <summary>Shows the window (sliding up the first time) and runs a search with this crop.</summary>
+    public void ShowSearch(byte[] jpegBytes)
     {
         _jpegBytes = jpegBytes;
+        if (!_revealed)
+        {
+            _revealed = true;
+            Reveal();
+        }
+
         if (_busy)
         {
             // A previous search is still in flight — coalesce to the latest crop
@@ -63,6 +89,21 @@ public partial class ResultWindow : Window
             return;
         }
         _ = RunSearchAsync(jpegBytes);
+    }
+
+    private void Reveal()
+    {
+        SetClickThrough(false);
+        Activate();
+        var targetTop = Top;
+        Top = SystemParameters.WorkArea.Bottom;
+        var slideUp = new DoubleAnimation(SystemParameters.WorkArea.Bottom, targetTop,
+            TimeSpan.FromMilliseconds(260))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        BeginAnimation(TopProperty, slideUp);
+        BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
     }
 
     private async Task RunSearchAsync(byte[] jpegBytes)
@@ -139,12 +180,14 @@ public partial class ResultWindow : Window
         }
     }
 
-    private async Task NavigateToLensResultsAsync(byte[] jpegBytes)
+    /// <summary>Ensures CoreWebView2 exists and is sitting on a google.com page. Idempotent/no-op if already there.</summary>
+    private async Task EnsureOnGoogleAsync()
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
         // EnsureCoreWebView2Async throws if called again with a DIFFERENT
         // CoreWebView2Environment instance — which a fresh CreateAsync() call always is.
-        // Only run this once; every re-search after the first reuses the existing
-        // CoreWebView2 the control already has.
+        // Only run this once; every later call reuses the existing CoreWebView2.
         if (Browser.CoreWebView2 is null)
         {
             var userDataFolder = Path.Combine(
@@ -156,22 +199,32 @@ public partial class ResultWindow : Window
             Browser.CoreWebView2!.Settings.UserAgent = MobileUserAgent;
             Browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
         }
+        AppLog.Info($"[perf] EnsureCoreWebView2: {sw.ElapsedMilliseconds}ms");
 
-        // Navigate to google.com first so the upload fetch below is same-origin — that way
-        // the uploaded image and the results page share the exact same cookie/session
-        // context automatically. Skip it if we're already sitting on a google.com page
-        // (e.g. a repeat search) — that round trip was pure dead weight every time.
+        // Skip navigating if we're already sitting on a google.com page (pre-warmed,
+        // or a repeat search) — that round trip was pure dead weight every time.
         var onGoogle = Uri.TryCreate(Browser.CoreWebView2.Source, UriKind.Absolute, out var currentUri)
             && currentUri.Host.EndsWith("google.com", StringComparison.OrdinalIgnoreCase);
         if (!onGoogle)
         {
+            sw.Restart();
             var navigated = new TaskCompletionSource();
             void OnNavCompleted(object? s, CoreWebView2NavigationCompletedEventArgs e) => navigated.TrySetResult();
             Browser.CoreWebView2.NavigationCompleted += OnNavCompleted;
             Browser.CoreWebView2.Navigate("https://www.google.com/");
             await navigated.Task;
             Browser.CoreWebView2.NavigationCompleted -= OnNavCompleted;
+            AppLog.Info($"[perf] Navigate to google.com: {sw.ElapsedMilliseconds}ms");
         }
+        else
+        {
+            AppLog.Info("[perf] Navigate to google.com: skipped (already there)");
+        }
+    }
+
+    private async Task NavigateToLensResultsAsync(byte[] jpegBytes)
+    {
+        await EnsureOnGoogleAsync();
 
         // ExecuteScriptAsync's return value does NOT reliably await a Promise on
         // every WebView2 runtime build — it can hand back the serialized (empty)
@@ -206,9 +259,11 @@ public partial class ResultWindow : Window
             })();
             """;
 
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         await Browser.CoreWebView2.ExecuteScriptAsync(script);
         var messageJson = await uploadDone.Task;
         Browser.CoreWebView2.WebMessageReceived -= OnMessage;
+        AppLog.Info($"[perf] Upload fetch: {sw.ElapsedMilliseconds}ms");
 
         using var doc = JsonDocument.Parse(messageJson);
         var root = doc.RootElement;
@@ -219,12 +274,14 @@ public partial class ResultWindow : Window
         if (string.IsNullOrEmpty(resultUrl))
             throw new InvalidOperationException("Google не вернул URL результата поиска.");
 
+        sw.Restart();
         var resultsLoaded = new TaskCompletionSource();
         void OnResultsNavCompleted(object? s, CoreWebView2NavigationCompletedEventArgs e) => resultsLoaded.TrySetResult();
         Browser.CoreWebView2.NavigationCompleted += OnResultsNavCompleted;
         Browser.CoreWebView2.Navigate(resultUrl);
         await resultsLoaded.Task;
         Browser.CoreWebView2.NavigationCompleted -= OnResultsNavCompleted;
+        AppLog.Info($"[perf] Navigate to results page: {sw.ElapsedMilliseconds}ms");
     }
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -241,5 +298,21 @@ public partial class ResultWindow : Window
         if (_closing) return;
         _closing = true;
         Close();
+    }
+
+    private const int GWL_EXSTYLE = -20;
+    private const int WS_EX_TRANSPARENT = 0x20;
+
+    [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+    [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    private void SetClickThrough(bool clickThrough)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return; // handle not created yet — nothing to do
+
+        var exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+        SetWindowLong(hwnd, GWL_EXSTYLE,
+            clickThrough ? exStyle | WS_EX_TRANSPARENT : exStyle & ~WS_EX_TRANSPARENT);
     }
 }

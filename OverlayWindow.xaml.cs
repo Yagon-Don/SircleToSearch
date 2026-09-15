@@ -62,6 +62,15 @@ public partial class OverlayWindow : Window
         Opacity = 0;
         BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150)));
 
+        // Create and pre-warm the result window right away, before the user has even
+        // finished dragging a selection — WebView2 startup + the google.com navigation
+        // cost (~600-800ms combined) then happens in the background during that time
+        // instead of sitting on the critical path after they release the mouse.
+        _resultWindow = new ResultWindow();
+        _resultWindow.Closed += (_, _) => _resultWindow = null;
+        _resultWindow.Show();
+        _ = _resultWindow.PreWarmAsync();
+
         var pulse = new DoubleAnimation(0.9, 1, TimeSpan.FromSeconds(1.4))
         {
             AutoReverse = true,
@@ -233,26 +242,25 @@ public partial class OverlayWindow : Window
 
     private void StartSearch(Rect selection)
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             var cropped = CropToBounds(selection);
             var jpegBytes = ToJpegBytes(cropped);
             cropped.Dispose();
+            AppLog.Info($"[perf] Crop+encode: {sw.ElapsedMilliseconds}ms");
 
             // Keep the overlay open — the selection stays on screen so the user can
             // drag/resize it and re-search, instead of the whole thing vanishing
-            // after one shot. Reuse the same result window across re-searches.
+            // after one shot. Reuse the same (already pre-warmed) result window across
+            // re-searches; only recreate it if it somehow got closed independently.
             if (_resultWindow is null)
             {
-                _resultWindow = new ResultWindow(jpegBytes);
+                _resultWindow = new ResultWindow();
                 _resultWindow.Closed += (_, _) => _resultWindow = null;
                 _resultWindow.Show();
             }
-            else
-            {
-                _resultWindow.UpdateSearch(jpegBytes);
-            }
-            _resultWindow.Activate();
+            _resultWindow.ShowSearch(jpegBytes);
         }
         catch (Exception ex)
         {
