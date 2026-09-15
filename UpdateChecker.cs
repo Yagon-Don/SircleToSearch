@@ -8,7 +8,7 @@ namespace SircleToSearch;
 public static class UpdateChecker
 {
     private const string LatestReleaseApiUrl =
-        "https://api.github.com/repos/Yagon-Don/SircleToSearch/releases/latest";
+        "https://api.github.com/repos/kiki-koteyka/SircleToSearch/releases/latest";
 
     public sealed record Result(bool UpdateAvailable, string LatestVersion, string ReleaseUrl);
 

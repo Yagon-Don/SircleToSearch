@@ -15,7 +15,7 @@
 
 ## Скачать
 
-Бери свежий `SircleToSearch.exe` со [страницы релизов](https://github.com/Yagon-Don/SircleToSearch/releases/latest) — это один самодостаточный файл, ставить больше ничего не нужно, кроме WebView2 Runtime (стоит из коробки на Win11 и почти всегда на Win10 через Edge). Запускаешь — и он сидит в трее.
+Бери свежий `SircleToSearch.exe` со [страницы релизов](https://github.com/kiki-koteyka/SircleToSearch/releases/latest) — это один самодостаточный файл, ставить больше ничего не нужно, кроме WebView2 Runtime (стоит из коробки на Win11 и почти всегда на Win10 через Edge). Запускаешь — и он сидит в трее.
 
 ## Стек
 
@@ -29,6 +29,13 @@
 ## Не связано с Google
 
 Это независимый инструмент, который автоматизирует тот же публичный flow "поиск по картинке", что и обычный браузер — официального Google Lens API для сторонних приложений не существует. Если Google поменяет этот эндпоинт, чинить нужно ровно одну функцию.
+
+## Контрибьюторы
+
+- [kiki-koteyka](https://github.com/kiki-koteyka)
+- [kikikoteyka-dev](https://github.com/kikikoteyka-dev)
+- [Yagon-Don](https://github.com/Yagon-Don)
+- [Claude](https://github.com/claude) — AI-напарник по коду
 
 ---
 

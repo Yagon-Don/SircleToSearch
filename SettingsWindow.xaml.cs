@@ -7,9 +7,9 @@ namespace SircleToSearch;
 
 public partial class SettingsWindow : FluentWindow
 {
-    private const string IssuesUrl = "https://github.com/Yagon-Don/SircleToSearch/issues/new";
-    private const string RepoUrl = "https://github.com/Yagon-Don/SircleToSearch";
-    private const string AuthorUrl = "https://github.com/Yagon-Don";
+    private const string IssuesUrl = "https://github.com/kiki-koteyka/SircleToSearch/issues/new";
+    private const string RepoUrl = "https://github.com/kiki-koteyka/SircleToSearch";
+    private const string AuthorUrl = "https://github.com/kiki-koteyka";
     private bool _loading = true;
 
     public event Action? LanguageChanged;

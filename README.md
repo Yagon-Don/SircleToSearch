@@ -15,7 +15,7 @@ Tray icon → right-click → **Settings** to enable launch-on-startup.
 
 ## Download
 
-Grab the latest `SircleToSearch.exe` from the [Releases page](https://github.com/Yagon-Don/SircleToSearch/releases/latest) — it's a single self-contained file, nothing else to install beyond the WebView2 Runtime (preinstalled on Windows 11, and on most Windows 10 machines via Edge). Run it, and it'll sit in the tray.
+Grab the latest `SircleToSearch.exe` from the [Releases page](https://github.com/kiki-koteyka/SircleToSearch/releases/latest) — it's a single self-contained file, nothing else to install beyond the WebView2 Runtime (preinstalled on Windows 11, and on most Windows 10 machines via Edge). Run it, and it'll sit in the tray.
 
 ## Stack
 
@@ -29,6 +29,13 @@ Grab the latest `SircleToSearch.exe` from the [Releases page](https://github.com
 ## Not affiliated with Google
 
 This is an independent tool that automates the public "search by image" upload flow the same way a browser does — there's no official Google Lens API for third-party apps. If Google changes that endpoint, the search step is the one function to fix.
+
+## Contributors
+
+- [kiki-koteyka](https://github.com/kiki-koteyka)
+- [kikikoteyka-dev](https://github.com/kikikoteyka-dev)
+- [Yagon-Don](https://github.com/Yagon-Don)
+- [Claude](https://github.com/claude) — AI pair programmer
 
 ---
 
