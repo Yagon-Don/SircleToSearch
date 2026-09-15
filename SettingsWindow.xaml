@@ -38,6 +38,17 @@
 
             <ui:CardControl Margin="0,0,0,8">
                 <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock x:Name="FastSearchLabel" VerticalAlignment="Center" FontSize="14"/>
+                        <TextBlock x:Name="FastSearchHint" FontSize="12" Opacity="0.7" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:ToggleSwitch x:Name="FastSearchToggle"
+                                 Checked="FastSearchToggle_Changed" Unchecked="FastSearchToggle_Changed"/>
+            </ui:CardControl>
+
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
                     <TextBlock x:Name="HotkeyInfoText" VerticalAlignment="Center" FontSize="14"/>
                 </ui:CardControl.Header>
             </ui:CardControl>

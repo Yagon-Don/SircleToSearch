@@ -34,6 +34,16 @@ public partial class OverlayWindow : Window
     {
         InitializeComponent();
 
+        // Position and hide BEFORE the first Show() paints a frame — doing this in
+        // Loaded instead left a visible blink: WPF composites one frame at the
+        // default (small, top-left) window rect first, then jumps to fullscreen and
+        // fades in, which reads as a flash on hotkey press.
+        Left = SystemParameters.VirtualScreenLeft;
+        Top = SystemParameters.VirtualScreenTop;
+        Width = SystemParameters.VirtualScreenWidth;
+        Height = SystemParameters.VirtualScreenHeight;
+        Opacity = 0;
+
         Loaded += OverlayWindow_Loaded;
         KeyDown += (_, e) =>
         {
@@ -46,11 +56,6 @@ public partial class OverlayWindow : Window
     {
         var (bitmap, _) = ScreenCapture.CaptureVirtualScreen();
         _screenshot = bitmap;
-
-        Left = SystemParameters.VirtualScreenLeft;
-        Top = SystemParameters.VirtualScreenTop;
-        Width = SystemParameters.VirtualScreenWidth;
-        Height = SystemParameters.VirtualScreenHeight;
 
         ScreenshotImage.Source = ToBitmapSource(bitmap);
         UpdateDimOverlay(Rect.Empty);

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -57,14 +58,18 @@ public partial class ResultWindow : Window
 
     /// <summary>
     /// Fire-and-forget from the moment the overlay opens: gets WebView2's environment/
-    /// controller spun up before the user has even finished selecting anything, so that
-    /// cost doesn't sit on the critical path once they release the mouse.
+    /// controller (and, in the non-fast mode, google.com) spun up before the user has
+    /// even finished selecting anything, so that cost doesn't sit on the critical path
+    /// once they release the mouse.
     /// </summary>
     public async Task PreWarmAsync()
     {
         try
         {
-            await EnsureCoreWebView2Async();
+            if (AppSettings.Current.FastSearch)
+                await EnsureCoreWebView2Async();
+            else
+                await EnsureOnGoogleAsync();
         }
         catch (Exception ex)
         {
@@ -114,7 +119,10 @@ public partial class ResultWindow : Window
 
         try
         {
-            await NavigateToLensResultsAsync(jpegBytes);
+            if (AppSettings.Current.FastSearch)
+                await NavigateToLensResultsFastAsync(jpegBytes);
+            else
+                await NavigateToLensResultsAsync(jpegBytes);
         }
         catch (Exception ex)
         {
@@ -201,18 +209,47 @@ public partial class ResultWindow : Window
         AppLog.Info($"[perf] EnsureCoreWebView2: {sw.ElapsedMilliseconds}ms");
     }
 
-    private async Task NavigateToLensResultsAsync(byte[] jpegBytes)
+    /// <summary>Ensures CoreWebView2 exists and is sitting on a google.com page. Idempotent/no-op if already there.</summary>
+    private async Task EnsureOnGoogleAsync()
     {
         await EnsureCoreWebView2Async();
 
-        // Upload via a plain HttpClient POST instead of a WebView2-hosted fetch() —
-        // this is what v1 did and it's noticeably faster, because it skips ever
-        // navigating WebView2 to the google.com homepage first. The catch that made us
-        // abandon this originally: the results page showed a broken thumbnail, because
-        // the uploaded image was tied to the HttpClient's session while WebView2 had an
-        // entirely separate cookie jar. Fixed here by copying the exact cookies Google
-        // set during the upload into WebView2's CookieManager before navigating, so the
-        // results page opens in the same session that actually holds the image.
+        // Skip navigating if we're already sitting on a google.com page (pre-warmed,
+        // or a repeat search) — that round trip was pure dead weight every time.
+        var onGoogle = Uri.TryCreate(Browser.CoreWebView2.Source, UriKind.Absolute, out var currentUri)
+            && currentUri.Host.EndsWith("google.com", StringComparison.OrdinalIgnoreCase);
+        if (!onGoogle)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var navigated = new TaskCompletionSource();
+            void OnNavCompleted(object? s, CoreWebView2NavigationCompletedEventArgs e) => navigated.TrySetResult();
+            Browser.CoreWebView2.NavigationCompleted += OnNavCompleted;
+            Browser.CoreWebView2.Navigate("https://www.google.com/");
+            await navigated.Task;
+            Browser.CoreWebView2.NavigationCompleted -= OnNavCompleted;
+            AppLog.Info($"[perf] Navigate to google.com: {sw.ElapsedMilliseconds}ms");
+        }
+        else
+        {
+            AppLog.Info("[perf] Navigate to google.com: skipped (already there)");
+        }
+    }
+
+    /// <summary>
+    /// Fast path: uploads via a plain HttpClient POST instead of a WebView2-hosted
+    /// fetch() — skips ever navigating WebView2 to the google.com homepage first, which
+    /// is noticeably quicker. The catch: the uploaded image is tied to the HttpClient's
+    /// own session while WebView2 has a separate cookie jar, so the exact cookies Google
+    /// set during the upload get copied into WebView2's CookieManager before navigating,
+    /// putting the results page in the same session that actually holds the image. Since
+    /// the request never visits google.com in a real browser session first, Google
+    /// occasionally decides it's suspicious and shows a captcha instead of results — that
+    /// tradeoff is why this path is opt-in (Settings > Fast search) rather than default.
+    /// </summary>
+    private async Task NavigateToLensResultsFastAsync(byte[] jpegBytes)
+    {
+        await EnsureCoreWebView2Async();
+
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var (resultUrl, cookies) = await UploadViaHttpAsync(jpegBytes);
         AppLog.Info($"[perf] Upload fetch: {sw.ElapsedMilliseconds}ms");
@@ -264,6 +301,75 @@ public partial class ResultWindow : Window
         var cookies = cookieContainer.GetCookies(new Uri("https://www.google.com")).Cast<Cookie>().ToList();
 
         return (resultUrl, cookies);
+    }
+
+    /// <summary>
+    /// Default (reliable) path: does the upload from inside WebView2 itself via fetch(),
+    /// after first navigating it to google.com, so the whole thing runs in one real
+    /// browser session start to finish. Slower than the fast path (that extra
+    /// google.com round trip), but doesn't trigger Google's captcha the way a
+    /// same-origin-but-never-actually-visited HttpClient upload occasionally does.
+    /// </summary>
+    private async Task NavigateToLensResultsAsync(byte[] jpegBytes)
+    {
+        await EnsureOnGoogleAsync();
+
+        // ExecuteScriptAsync's return value does NOT reliably await a Promise on
+        // every WebView2 runtime build — it can hand back the serialized (empty)
+        // Promise object instead of the resolved value. postMessage + WebMessageReceived
+        // is the pattern that actually works for getting an async result back to C#.
+        var uploadDone = new TaskCompletionSource<string>();
+        void OnMessage(object? s, CoreWebView2WebMessageReceivedEventArgs e) =>
+            uploadDone.TrySetResult(e.WebMessageAsJson);
+        Browser.CoreWebView2.WebMessageReceived += OnMessage;
+
+        var base64 = Convert.ToBase64String(jpegBytes);
+        var script = $$"""
+            (async () => {
+                try {
+                    const byteChars = atob("{{base64}}");
+                    const byteNumbers = new Array(byteChars.length);
+                    for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+                    const blob = new Blob([new Uint8Array(byteNumbers)], { type: "image/jpeg" });
+                    const fd = new FormData();
+                    fd.append("encoded_image", blob, "screenshot.jpg");
+                    fd.append("image_url", "");
+                    fd.append("sbisrc", "th");
+                    const resp = await fetch("https://www.google.com/searchbyimage/upload", {
+                        method: "POST",
+                        body: fd,
+                        credentials: "include",
+                    });
+                    window.chrome.webview.postMessage({ ok: true, url: resp.url });
+                } catch (err) {
+                    window.chrome.webview.postMessage({ ok: false, error: String(err) });
+                }
+            })();
+            """;
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await Browser.CoreWebView2.ExecuteScriptAsync(script);
+        var messageJson = await uploadDone.Task;
+        Browser.CoreWebView2.WebMessageReceived -= OnMessage;
+        AppLog.Info($"[perf] Upload fetch: {sw.ElapsedMilliseconds}ms");
+
+        using var doc = JsonDocument.Parse(messageJson);
+        var root = doc.RootElement;
+        if (!root.GetProperty("ok").GetBoolean())
+            throw new InvalidOperationException($"Google отклонил загрузку: {root.GetProperty("error").GetString()}");
+
+        var resultUrl = root.GetProperty("url").GetString();
+        if (string.IsNullOrEmpty(resultUrl))
+            throw new InvalidOperationException("Google не вернул URL результата поиска.");
+
+        sw.Restart();
+        var resultsLoaded = new TaskCompletionSource();
+        void OnResultsNavCompleted(object? s, CoreWebView2NavigationCompletedEventArgs e) => resultsLoaded.TrySetResult();
+        Browser.CoreWebView2.NavigationCompleted += OnResultsNavCompleted;
+        Browser.CoreWebView2.Navigate(resultUrl);
+        await resultsLoaded.Task;
+        Browser.CoreWebView2.NavigationCompleted -= OnResultsNavCompleted;
+        AppLog.Info($"[perf] Navigate to results page: {sw.ElapsedMilliseconds}ms");
     }
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

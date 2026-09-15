@@ -21,6 +21,7 @@ public partial class SettingsWindow : FluentWindow
         {
             LanguageCombo.SelectedIndex = AppSettings.Current.Language == "ru" ? 1 : 0;
             AutostartToggle.IsChecked = Autostart.IsEnabled();
+            FastSearchToggle.IsChecked = AppSettings.Current.FastSearch;
             ApplyStrings();
             _loading = false;
         };
@@ -32,6 +33,8 @@ public partial class SettingsWindow : FluentWindow
         WelcomeText.Text = Strings.Get("SettingsWelcome");
         LanguageLabel.Text = Strings.Get("SettingsLanguage");
         AutostartLabel.Text = Strings.Get("SettingsAutostart");
+        FastSearchLabel.Text = Strings.Get("SettingsFastSearch");
+        FastSearchHint.Text = Strings.Get("SettingsFastSearchHint");
         HotkeyInfoText.Text = Strings.Get("SettingsHotkeyInfo");
         ReportBugButton.Content = Strings.Get("SettingsReportBug");
         CloseButton.Content = Strings.Get("SettingsClose");
@@ -51,6 +54,14 @@ public partial class SettingsWindow : FluentWindow
         AppSettings.Current.Save();
         ApplyStrings();
         LanguageChanged?.Invoke();
+    }
+
+    private void FastSearchToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+
+        AppSettings.Current.FastSearch = FastSearchToggle.IsChecked == true;
+        AppSettings.Current.Save();
     }
 
     private void AutostartToggle_Changed(object sender, RoutedEventArgs e)

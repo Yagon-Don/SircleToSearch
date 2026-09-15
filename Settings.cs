@@ -9,6 +9,12 @@ public sealed class AppSettings
     public string Language { get; set; } = "en";
     public bool FirstRunCompleted { get; set; }
 
+    // Default off: the direct-HttpClient upload is faster but sometimes gets Google to
+    // show a captcha, because the request never actually visits google.com in a real
+    // browser session first. The WebView2 fetch()-based path is slower but has not
+    // triggered that.
+    public bool FastSearch { get; set; }
+
     private static readonly string SettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SircleToSearch", "settings.json");
