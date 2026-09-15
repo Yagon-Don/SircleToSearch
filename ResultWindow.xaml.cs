@@ -1,6 +1,9 @@
 using System;
 using System.IO;
-using System.Text.Json;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -18,6 +21,8 @@ public partial class ResultWindow : Window
     private bool _revealed;
     private byte[]? _pendingJpegBytes;
     private MorphingLoader? _loader;
+    private double _targetLeft;
+    private double _targetTop;
     private const string MobileUserAgent =
         "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) " +
         "Chrome/124.0.0.0 Mobile Safari/537.36";
@@ -33,34 +38,33 @@ public partial class ResultWindow : Window
         Width = 460;
         var screenHeight = SystemParameters.WorkArea.Height;
         Height = Math.Min(760, screenHeight * 0.82);
-        Left = SystemParameters.WorkArea.Right - Width - 24;
-        Top = SystemParameters.WorkArea.Bottom - Height;
+        _targetLeft = SystemParameters.WorkArea.Right - Width - 24;
+        _targetTop = SystemParameters.WorkArea.Bottom - Height;
 
-        // Hidden (not just transparent) until Reveal() — this window is created and shown
+        // Parked far off any monitor until Reveal() — this window is created and shown
         // (so its WebView2 control gets a real HWND to initialize in) as soon as the
         // overlay opens, well before the user finishes dragging a selection, so
-        // PreWarmAsync can eat the WebView2 startup + google.com navigation cost while
-        // they're still drawing. Opacity=0 alone isn't enough here: DWM renders a
-        // blurred "ghost" placeholder for a layered AllowsTransparency window that
-        // hasn't fully composited a real frame yet, which showed up as a visible smudge
-        // over the desktop. Visibility.Hidden gives it no screen presence at all, and as
-        // a bonus a hidden window can't steal clicks either — no click-through hack needed.
-        Opacity = 0;
-        Visibility = Visibility.Hidden;
+        // PreWarmAsync can eat the WebView2 startup cost while they're still drawing.
+        // Opacity=0/Visibility.Hidden tricks both left visible artifacts (DWM ghosts a
+        // layered window that hasn't composited a real frame, or the brief window
+        // between Show() and the property taking effect flashes on screen) — physically
+        // parking it off-screen means there's nothing for the compositor to ever draw.
+        Left = -5000;
+        Top = _targetTop;
 
         _loader = new MorphingLoader(SpinnerShape, radius: 24);
     }
 
     /// <summary>
-    /// Fire-and-forget from the moment the overlay opens: gets WebView2 initialized and
-    /// sitting on google.com before the user has even finished selecting anything, so that
+    /// Fire-and-forget from the moment the overlay opens: gets WebView2's environment/
+    /// controller spun up before the user has even finished selecting anything, so that
     /// cost doesn't sit on the critical path once they release the mouse.
     /// </summary>
     public async Task PreWarmAsync()
     {
         try
         {
-            await EnsureOnGoogleAsync();
+            await EnsureCoreWebView2Async();
         }
         catch (Exception ex)
         {
@@ -91,17 +95,15 @@ public partial class ResultWindow : Window
 
     private void Reveal()
     {
-        Visibility = Visibility.Visible;
         Activate();
-        var targetTop = Top;
+        Left = _targetLeft;
         Top = SystemParameters.WorkArea.Bottom;
-        var slideUp = new DoubleAnimation(SystemParameters.WorkArea.Bottom, targetTop,
+        var slideUp = new DoubleAnimation(SystemParameters.WorkArea.Bottom, _targetTop,
             TimeSpan.FromMilliseconds(260))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         };
         BeginAnimation(TopProperty, slideUp);
-        BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
     }
 
     private async Task RunSearchAsync(byte[] jpegBytes)
@@ -178,99 +180,51 @@ public partial class ResultWindow : Window
         }
     }
 
-    /// <summary>Ensures CoreWebView2 exists and is sitting on a google.com page. Idempotent/no-op if already there.</summary>
-    private async Task EnsureOnGoogleAsync()
+    /// <summary>Ensures CoreWebView2 exists. Idempotent — a no-op after the first call.</summary>
+    private async Task EnsureCoreWebView2Async()
     {
+        if (Browser.CoreWebView2 is not null) return;
+
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         // EnsureCoreWebView2Async throws if called again with a DIFFERENT
-        // CoreWebView2Environment instance — which a fresh CreateAsync() call always is.
-        // Only run this once; every later call reuses the existing CoreWebView2.
-        if (Browser.CoreWebView2 is null)
-        {
-            var userDataFolder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "SircleToSearch", "WebView2");
-            var env = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
-            await Browser.EnsureCoreWebView2Async(env);
+        // CoreWebView2Environment instance — which a fresh CreateAsync() call always is —
+        // hence the CoreWebView2-is-null guard above.
+        var userDataFolder = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "SircleToSearch", "WebView2");
+        var env = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
+        await Browser.EnsureCoreWebView2Async(env);
 
-            Browser.CoreWebView2!.Settings.UserAgent = MobileUserAgent;
-            Browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
-        }
+        Browser.CoreWebView2!.Settings.UserAgent = MobileUserAgent;
+        Browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
         AppLog.Info($"[perf] EnsureCoreWebView2: {sw.ElapsedMilliseconds}ms");
-
-        // Skip navigating if we're already sitting on a google.com page (pre-warmed,
-        // or a repeat search) — that round trip was pure dead weight every time.
-        var onGoogle = Uri.TryCreate(Browser.CoreWebView2.Source, UriKind.Absolute, out var currentUri)
-            && currentUri.Host.EndsWith("google.com", StringComparison.OrdinalIgnoreCase);
-        if (!onGoogle)
-        {
-            sw.Restart();
-            var navigated = new TaskCompletionSource();
-            void OnNavCompleted(object? s, CoreWebView2NavigationCompletedEventArgs e) => navigated.TrySetResult();
-            Browser.CoreWebView2.NavigationCompleted += OnNavCompleted;
-            Browser.CoreWebView2.Navigate("https://www.google.com/");
-            await navigated.Task;
-            Browser.CoreWebView2.NavigationCompleted -= OnNavCompleted;
-            AppLog.Info($"[perf] Navigate to google.com: {sw.ElapsedMilliseconds}ms");
-        }
-        else
-        {
-            AppLog.Info("[perf] Navigate to google.com: skipped (already there)");
-        }
     }
 
     private async Task NavigateToLensResultsAsync(byte[] jpegBytes)
     {
-        await EnsureOnGoogleAsync();
+        await EnsureCoreWebView2Async();
 
-        // ExecuteScriptAsync's return value does NOT reliably await a Promise on
-        // every WebView2 runtime build — it can hand back the serialized (empty)
-        // Promise object instead of the resolved value. postMessage + WebMessageReceived
-        // is the pattern that actually works for getting an async result back to C#.
-        var uploadDone = new TaskCompletionSource<string>();
-        void OnMessage(object? s, CoreWebView2WebMessageReceivedEventArgs e) =>
-            uploadDone.TrySetResult(e.WebMessageAsJson);
-        Browser.CoreWebView2.WebMessageReceived += OnMessage;
-
-        var base64 = Convert.ToBase64String(jpegBytes);
-        var script = $$"""
-            (async () => {
-                try {
-                    const byteChars = atob("{{base64}}");
-                    const byteNumbers = new Array(byteChars.length);
-                    for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
-                    const blob = new Blob([new Uint8Array(byteNumbers)], { type: "image/jpeg" });
-                    const fd = new FormData();
-                    fd.append("encoded_image", blob, "screenshot.jpg");
-                    fd.append("image_url", "");
-                    fd.append("sbisrc", "th");
-                    const resp = await fetch("https://www.google.com/searchbyimage/upload", {
-                        method: "POST",
-                        body: fd,
-                        credentials: "include",
-                    });
-                    window.chrome.webview.postMessage({ ok: true, url: resp.url });
-                } catch (err) {
-                    window.chrome.webview.postMessage({ ok: false, error: String(err) });
-                }
-            })();
-            """;
-
+        // Upload via a plain HttpClient POST instead of a WebView2-hosted fetch() —
+        // this is what v1 did and it's noticeably faster, because it skips ever
+        // navigating WebView2 to the google.com homepage first. The catch that made us
+        // abandon this originally: the results page showed a broken thumbnail, because
+        // the uploaded image was tied to the HttpClient's session while WebView2 had an
+        // entirely separate cookie jar. Fixed here by copying the exact cookies Google
+        // set during the upload into WebView2's CookieManager before navigating, so the
+        // results page opens in the same session that actually holds the image.
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        await Browser.CoreWebView2.ExecuteScriptAsync(script);
-        var messageJson = await uploadDone.Task;
-        Browser.CoreWebView2.WebMessageReceived -= OnMessage;
+        var (resultUrl, cookies) = await UploadViaHttpAsync(jpegBytes);
         AppLog.Info($"[perf] Upload fetch: {sw.ElapsedMilliseconds}ms");
 
-        using var doc = JsonDocument.Parse(messageJson);
-        var root = doc.RootElement;
-        if (!root.GetProperty("ok").GetBoolean())
-            throw new InvalidOperationException($"Google отклонил загрузку: {root.GetProperty("error").GetString()}");
-
-        var resultUrl = root.GetProperty("url").GetString();
-        if (string.IsNullOrEmpty(resultUrl))
-            throw new InvalidOperationException("Google не вернул URL результата поиска.");
+        var cookieManager = Browser.CoreWebView2.CookieManager;
+        foreach (var cookie in cookies)
+        {
+            var wvCookie = cookieManager.CreateCookie(cookie.Name, cookie.Value, cookie.Domain, cookie.Path);
+            wvCookie.IsSecure = cookie.Secure;
+            wvCookie.IsHttpOnly = cookie.HttpOnly;
+            cookieManager.AddOrUpdateCookie(wvCookie);
+        }
 
         sw.Restart();
         var resultsLoaded = new TaskCompletionSource();
@@ -280,6 +234,36 @@ public partial class ResultWindow : Window
         await resultsLoaded.Task;
         Browser.CoreWebView2.NavigationCompleted -= OnResultsNavCompleted;
         AppLog.Info($"[perf] Navigate to results page: {sw.ElapsedMilliseconds}ms");
+    }
+
+    private static async Task<(string ResultUrl, System.Collections.Generic.List<Cookie> Cookies)> UploadViaHttpAsync(byte[] jpegBytes)
+    {
+        var cookieContainer = new CookieContainer();
+        var handler = new HttpClientHandler
+        {
+            CookieContainer = cookieContainer,
+            AllowAutoRedirect = false,
+        };
+        using var client = new HttpClient(handler);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(MobileUserAgent);
+
+        using var content = new MultipartFormDataContent();
+        var imageContent = new ByteArrayContent(jpegBytes);
+        imageContent.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
+        content.Add(imageContent, "encoded_image", "screenshot.jpg");
+        content.Add(new StringContent(""), "image_url");
+        content.Add(new StringContent("th"), "sbisrc");
+
+        using var response = await client.PostAsync("https://www.google.com/searchbyimage/upload", content);
+
+        if ((int)response.StatusCode is < 300 or >= 400 || response.Headers.Location is null)
+            throw new InvalidOperationException($"Google не вернул редирект на результат (статус {(int)response.StatusCode}).");
+
+        var location = response.Headers.Location;
+        var resultUrl = location.IsAbsoluteUri ? location.ToString() : "https://www.google.com" + location;
+        var cookies = cookieContainer.GetCookies(new Uri("https://www.google.com")).Cast<Cookie>().ToList();
+
+        return (resultUrl, cookies);
     }
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
