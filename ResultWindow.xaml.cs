@@ -1,11 +1,9 @@
 using System;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
-using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using Microsoft.Web.WebView2.Core;
@@ -38,17 +36,17 @@ public partial class ResultWindow : Window
         Left = SystemParameters.WorkArea.Right - Width - 24;
         Top = SystemParameters.WorkArea.Bottom - Height;
 
-        // Invisible until Reveal() — this window is created and shown (so its WebView2
-        // control gets a real HWND to initialize in) as soon as the overlay opens, well
-        // before the user finishes dragging a selection, so PreWarmAsync can eat the
-        // WebView2 startup + google.com navigation cost while they're still drawing.
+        // Hidden (not just transparent) until Reveal() — this window is created and shown
+        // (so its WebView2 control gets a real HWND to initialize in) as soon as the
+        // overlay opens, well before the user finishes dragging a selection, so
+        // PreWarmAsync can eat the WebView2 startup + google.com navigation cost while
+        // they're still drawing. Opacity=0 alone isn't enough here: DWM renders a
+        // blurred "ghost" placeholder for a layered AllowsTransparency window that
+        // hasn't fully composited a real frame yet, which showed up as a visible smudge
+        // over the desktop. Visibility.Hidden gives it no screen presence at all, and as
+        // a bonus a hidden window can't steal clicks either — no click-through hack needed.
         Opacity = 0;
-
-        // Being invisible doesn't stop this Topmost window from swallowing clicks at its
-        // screen position — if the user's selection rectangle happens to be under this
-        // corner, they'd click the hidden window instead of the overlay beneath it.
-        // Click-through until Reveal() removes it.
-        SetClickThrough(true);
+        Visibility = Visibility.Hidden;
 
         _loader = new MorphingLoader(SpinnerShape, radius: 24);
     }
@@ -93,7 +91,7 @@ public partial class ResultWindow : Window
 
     private void Reveal()
     {
-        SetClickThrough(false);
+        Visibility = Visibility.Visible;
         Activate();
         var targetTop = Top;
         Top = SystemParameters.WorkArea.Bottom;
@@ -298,21 +296,5 @@ public partial class ResultWindow : Window
         if (_closing) return;
         _closing = true;
         Close();
-    }
-
-    private const int GWL_EXSTYLE = -20;
-    private const int WS_EX_TRANSPARENT = 0x20;
-
-    [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-    [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
-
-    private void SetClickThrough(bool clickThrough)
-    {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (hwnd == IntPtr.Zero) return; // handle not created yet — nothing to do
-
-        var exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        SetWindowLong(hwnd, GWL_EXSTYLE,
-            clickThrough ? exStyle | WS_EX_TRANSPARENT : exStyle & ~WS_EX_TRANSPARENT);
     }
 }
