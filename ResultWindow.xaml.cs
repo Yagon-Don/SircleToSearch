@@ -6,7 +6,6 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using System.Windows.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
 
 namespace SircleToSearch;
@@ -18,7 +17,6 @@ public partial class ResultWindow : Window
     private bool _busy;
     private byte[]? _pendingJpegBytes;
     private MorphingLoader? _loader;
-    private bool _hasContent;
     private const string MobileUserAgent =
         "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) " +
         "Chrome/124.0.0.0 Mobile Safari/537.36";
@@ -71,14 +69,7 @@ public partial class ResultWindow : Window
     {
         _busy = true;
         SetStatus(searching: true);
-        if (!_hasContent) LoadingBackdrop.Source = null; // nothing to blur yet on the very first search
         ShowLoading();
-
-        // Keep re-snapshotting the page for as long as this search is in flight, so the
-        // blur behind the spinner reflects the actual loading progress (blank -> google.com
-        // -> results painting in) instead of one frozen frame from before the request began.
-        using var captureLoopCts = new CancellationTokenSource();
-        var captureLoop = RunCaptureLoopAsync(captureLoopCts.Token);
 
         try
         {
@@ -90,9 +81,6 @@ public partial class ResultWindow : Window
         }
         finally
         {
-            captureLoopCts.Cancel();
-            await captureLoop;
-
             // No artificial minimum — the spinner shows for exactly as long as the
             // real upload+navigate takes, then fades out (see HideLoadingAsync).
             await HideLoadingAsync();
@@ -104,51 +92,6 @@ public partial class ResultWindow : Window
         {
             _pendingJpegBytes = null;
             await RunSearchAsync(pending);
-        }
-    }
-
-    private async Task RunCaptureLoopAsync(CancellationToken token)
-    {
-        while (!token.IsCancellationRequested)
-        {
-            if (Browser.CoreWebView2 is not null)
-                await CaptureBackdropAsync();
-
-            try
-            {
-                await Task.Delay(600, token);
-            }
-            catch (TaskCanceledException)
-            {
-                break;
-            }
-        }
-    }
-
-    private async Task CaptureBackdropAsync()
-    {
-        try
-        {
-            using var stream = new MemoryStream();
-            // JPEG encodes much faster than PNG — this runs on the same renderer that's
-            // also busy loading the page, and a slow PNG encode every tick was measurably
-            // slowing the actual navigation down (hence the spinner "hanging" too long).
-            await Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Jpeg, stream);
-            stream.Position = 0;
-
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.StreamSource = stream;
-            bitmap.EndInit();
-            bitmap.Freeze();
-            LoadingBackdrop.Source = bitmap;
-            _hasContent = true;
-        }
-        catch
-        {
-            // Purely cosmetic and runs every 200ms — a failed capture just means no
-            // fresh backdrop frame this tick, not worth logging every miss.
         }
     }
 
@@ -214,16 +157,21 @@ public partial class ResultWindow : Window
             Browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
         }
 
-        // Navigate to google.com first so the upload fetch below is same-origin —
-        // that way the uploaded image and the results page share the exact same
-        // cookie jar/session automatically, instead of us having to transplant
-        // Set-Cookie headers between a separate HttpClient and the WebView2 profile.
-        var navigated = new TaskCompletionSource();
-        void OnNavCompleted(object? s, CoreWebView2NavigationCompletedEventArgs e) => navigated.TrySetResult();
-        Browser.CoreWebView2.NavigationCompleted += OnNavCompleted;
-        Browser.CoreWebView2.Navigate("https://www.google.com/");
-        await navigated.Task;
-        Browser.CoreWebView2.NavigationCompleted -= OnNavCompleted;
+        // Navigate to google.com first so the upload fetch below is same-origin — that way
+        // the uploaded image and the results page share the exact same cookie/session
+        // context automatically. Skip it if we're already sitting on a google.com page
+        // (e.g. a repeat search) — that round trip was pure dead weight every time.
+        var onGoogle = Uri.TryCreate(Browser.CoreWebView2.Source, UriKind.Absolute, out var currentUri)
+            && currentUri.Host.EndsWith("google.com", StringComparison.OrdinalIgnoreCase);
+        if (!onGoogle)
+        {
+            var navigated = new TaskCompletionSource();
+            void OnNavCompleted(object? s, CoreWebView2NavigationCompletedEventArgs e) => navigated.TrySetResult();
+            Browser.CoreWebView2.NavigationCompleted += OnNavCompleted;
+            Browser.CoreWebView2.Navigate("https://www.google.com/");
+            await navigated.Task;
+            Browser.CoreWebView2.NavigationCompleted -= OnNavCompleted;
+        }
 
         // ExecuteScriptAsync's return value does NOT reliably await a Promise on
         // every WebView2 runtime build — it can hand back the serialized (empty)

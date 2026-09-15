@@ -24,6 +24,7 @@ Grab the latest `SircleToSearch.exe` from the [Releases page](https://github.com
 - Screen capture via GDI (`CopyFromScreen`); cropping via a manual `Graphics.DrawImage` pass — `Bitmap.Clone(rect)` has a known GDI+ bug that corrupts pixels for some rectangles.
 - Image search via `Microsoft.Web.WebView2` — the upload itself runs *inside* the WebView2 page via `fetch()`, so the uploaded image and the results page share one cookie/session context instead of a separate HTTP client's session going out of sync with the browser control's.
 - The loading spinner is a from-scratch port of the real Material 3 shape-morphing loading indicator (shape data + spring/rotation constants), based on [Aler1x/m3-loading-indicator](https://github.com/Aler1x/m3-loading-indicator) (Apache-2.0).
+- Settings window UI uses [WPF-UI](https://github.com/lepoco/wpfui) (MIT) for the Fluent Design / Mica look.
 
 ## Not affiliated with Google
 

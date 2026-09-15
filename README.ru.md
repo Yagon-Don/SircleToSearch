@@ -24,6 +24,7 @@
 - Захват экрана — GDI (`CopyFromScreen`), обрезка — ручной `Graphics.DrawImage` (у `Bitmap.Clone(rect)` из GDI+ есть баг с порчей пикселей на некоторых прямоугольниках).
 - Поиск по картинке — `Microsoft.Web.WebView2`: сам аплоад делается изнутри WebView2 через `fetch()`, чтобы избежать рассинхрона cookie-сессии между отдельным HTTP-клиентом и окном результата.
 - Спиннер загрузки — портированный с нуля настоящий Material 3 shape-morphing индикатор (данные форм + константы пружины/вращения), на основе [Aler1x/m3-loading-indicator](https://github.com/Aler1x/m3-loading-indicator) (Apache-2.0).
+- Окно настроек — на [WPF-UI](https://github.com/lepoco/wpfui) (MIT), Fluent Design / Mica.
 
 ## Не связано с Google
 

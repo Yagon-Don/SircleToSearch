@@ -1,105 +1,70 @@
-<Window x:Class="SircleToSearch.SettingsWindow"
+<ui:FluentWindow x:Class="SircleToSearch.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="SircleToSearch" Height="440" Width="420"
-        ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
-        Background="#F1F3F4">
-    <Window.Resources>
-        <!-- WPF's default ComboBoxItem template pulls selection/hover colors from the
-             SYSTEM theme (SystemColors.Highlight etc). On a dark-themed machine that can
-             render near-black-on-black. Force our own colors so it never depends on the
-             user's Windows theme. -->
-        <Style x:Key="LightComboBoxItem" TargetType="ComboBoxItem">
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="Foreground" Value="#3C4043"/>
-            <Setter Property="Padding" Value="8,6"/>
-            <Style.Triggers>
-                <Trigger Property="IsHighlighted" Value="True">
-                    <Setter Property="Background" Value="#E8F0FE"/>
-                    <Setter Property="Foreground" Value="#1967D2"/>
-                </Trigger>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#E8F0FE"/>
-                    <Setter Property="Foreground" Value="#1967D2"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-    </Window.Resources>
-    <Grid Margin="24">
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="SircleToSearch" Height="520" Width="460"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica">
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="20"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="16"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="16"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="16"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="16"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock x:Name="TitleText" Grid.Row="0" FontFamily="Segoe UI Semibold" FontSize="20"
-                   Foreground="#202124" Text="SircleToSearch"/>
+        <ui:TitleBar Grid.Row="0" Title="SircleToSearch" ShowMaximize="False" ShowMinimize="False"/>
 
-        <TextBlock x:Name="WelcomeText" Grid.Row="1" Margin="0,8,0,0" TextWrapping="Wrap"
-                   FontFamily="Segoe UI" FontSize="13" Foreground="#5F6368"/>
+        <StackPanel Grid.Row="1" Margin="20,4,20,20">
+            <TextBlock x:Name="WelcomeText" TextWrapping="Wrap" Opacity="0.7" FontSize="13" Margin="0,0,0,16"/>
 
-        <StackPanel Grid.Row="3" Orientation="Horizontal">
-            <TextBlock x:Name="LanguageLabel" VerticalAlignment="Center" Width="120"
-                       FontFamily="Segoe UI" FontSize="13" Foreground="#3C4043"/>
-            <ComboBox x:Name="LanguageCombo" Width="160" Background="White" Foreground="#3C4043"
-                      ItemContainerStyle="{StaticResource LightComboBoxItem}"
-                      SelectionChanged="LanguageCombo_SelectionChanged">
-                <ComboBoxItem Content="English" Tag="en"/>
-                <ComboBoxItem Content="Русский" Tag="ru"/>
-            </ComboBox>
-        </StackPanel>
+            <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon Globe24}">
+                <ui:CardControl.Header>
+                    <TextBlock x:Name="LanguageLabel" VerticalAlignment="Center" FontSize="14"/>
+                </ui:CardControl.Header>
+                <ComboBox x:Name="LanguageCombo" Width="140" SelectionChanged="LanguageCombo_SelectionChanged">
+                    <ComboBoxItem Content="English" Tag="en"/>
+                    <ComboBoxItem Content="Русский" Tag="ru"/>
+                </ComboBox>
+            </ui:CardControl>
 
-        <CheckBox x:Name="AutostartCheck" Grid.Row="5" VerticalAlignment="Center"
-                  FontFamily="Segoe UI" FontSize="13" Foreground="#3C4043"
-                  Checked="AutostartCheck_Changed" Unchecked="AutostartCheck_Changed"/>
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
+                    <TextBlock x:Name="AutostartLabel" VerticalAlignment="Center" FontSize="14"/>
+                </ui:CardControl.Header>
+                <ui:ToggleSwitch x:Name="AutostartToggle"
+                                 Checked="AutostartToggle_Changed" Unchecked="AutostartToggle_Changed"/>
+            </ui:CardControl>
 
-        <TextBlock x:Name="HotkeyInfoText" Grid.Row="7" FontFamily="Segoe UI" FontSize="13" Foreground="#5F6368"/>
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
+                    <TextBlock x:Name="HotkeyInfoText" VerticalAlignment="Center" FontSize="14"/>
+                </ui:CardControl.Header>
+            </ui:CardControl>
 
-        <StackPanel Grid.Row="9" Orientation="Horizontal">
-            <TextBlock x:Name="VersionText" VerticalAlignment="Center" Width="120"
-                       FontFamily="Segoe UI" FontSize="13" Foreground="#3C4043"/>
-            <Button x:Name="CheckUpdateButton" Padding="12,6"
-                    Background="Transparent" BorderBrush="#DADCE0" BorderThickness="1"
-                    FontFamily="Segoe UI" FontSize="12" Foreground="#3C4043" Cursor="Hand"
-                    Click="CheckUpdateButton_Click"/>
-            <TextBlock x:Name="UpdateStatusText" Margin="10,0,0,0" VerticalAlignment="Center"
-                       FontFamily="Segoe UI" FontSize="12" Foreground="#5F6368"/>
-        </StackPanel>
+            <ui:CardControl Margin="0,0,0,16" Icon="{ui:SymbolIcon ArrowCounterclockwise24}">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock x:Name="VersionText" FontSize="14"/>
+                        <TextBlock x:Name="UpdateStatusText" FontSize="12" Opacity="0.7" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:Button x:Name="CheckUpdateButton" Appearance="Secondary" Click="CheckUpdateButton_Click"/>
+            </ui:CardControl>
 
-        <StackPanel Grid.Row="11" Orientation="Horizontal">
-            <Button x:Name="GitHubButton" Padding="12,6" Margin="0,0,10,0"
-                    Background="Transparent" BorderBrush="#DADCE0" BorderThickness="1"
-                    FontFamily="Segoe UI" FontSize="12" Foreground="#3C4043" Cursor="Hand"
-                    Click="GitHubButton_Click"/>
-            <Button x:Name="AuthorButton" Padding="12,6"
-                    Background="Transparent" BorderBrush="#DADCE0" BorderThickness="1"
-                    FontFamily="Segoe UI" FontSize="12" Foreground="#3C4043" Cursor="Hand"
-                    Click="AuthorButton_Click"/>
-        </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <ui:Button x:Name="GitHubButton" Appearance="Secondary" Margin="0,0,8,0" Click="GitHubButton_Click"/>
+                <ui:Button x:Name="AuthorButton" Appearance="Secondary" Click="AuthorButton_Click"/>
+            </StackPanel>
 
-        <TextBlock x:Name="BySomeoneText" Grid.Row="13" VerticalAlignment="Center"
-                   HorizontalAlignment="Left" FontFamily="Segoe UI" FontSize="11" Foreground="#9AA0A6"/>
-
-        <StackPanel Grid.Row="13" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="ReportBugButton" Padding="14,7" Margin="0,0,10,0"
-                    Background="Transparent" BorderBrush="#DADCE0" BorderThickness="1"
-                    FontFamily="Segoe UI" FontSize="13" Foreground="#3C4043" Cursor="Hand"
-                    Click="ReportBugButton_Click"/>
-            <Button x:Name="CloseButton" Padding="18,7"
-                    Background="#4285F4" BorderThickness="0" Foreground="White"
-                    FontFamily="Segoe UI Semibold" FontSize="13" Cursor="Hand"
-                    Click="CloseButton_Click"/>
+            <Grid Margin="0,24,0,0">
+                <TextBlock x:Name="BySomeoneText" Opacity="0.5" FontSize="11" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <ui:Button x:Name="ReportBugButton" Appearance="Secondary" Icon="{ui:SymbolIcon Bug24}"
+                               Margin="0,0,8,0" Click="ReportBugButton_Click"/>
+                    <ui:Button x:Name="CloseButton" Appearance="Primary" Click="CloseButton_Click"/>
+                </StackPanel>
+            </Grid>
         </StackPanel>
     </Grid>
-</Window>
+</ui:FluentWindow>

@@ -1,10 +1,11 @@
 using System;
 using System.Diagnostics;
 using System.Windows;
+using Wpf.Ui.Controls;
 
 namespace SircleToSearch;
 
-public partial class SettingsWindow : Window
+public partial class SettingsWindow : FluentWindow
 {
     private const string IssuesUrl = "https://github.com/Yagon-Don/SircleToSearch/issues/new";
     private const string RepoUrl = "https://github.com/Yagon-Don/SircleToSearch";
@@ -19,7 +20,7 @@ public partial class SettingsWindow : Window
         Loaded += (_, _) =>
         {
             LanguageCombo.SelectedIndex = AppSettings.Current.Language == "ru" ? 1 : 0;
-            AutostartCheck.IsChecked = Autostart.IsEnabled();
+            AutostartToggle.IsChecked = Autostart.IsEnabled();
             ApplyStrings();
             _loading = false;
         };
@@ -28,10 +29,9 @@ public partial class SettingsWindow : Window
     private void ApplyStrings()
     {
         Title = Strings.Get("SettingsTitle");
-        TitleText.Text = "SircleToSearch";
         WelcomeText.Text = Strings.Get("SettingsWelcome");
         LanguageLabel.Text = Strings.Get("SettingsLanguage");
-        AutostartCheck.Content = Strings.Get("SettingsAutostart");
+        AutostartLabel.Text = Strings.Get("SettingsAutostart");
         HotkeyInfoText.Text = Strings.Get("SettingsHotkeyInfo");
         ReportBugButton.Content = Strings.Get("SettingsReportBug");
         CloseButton.Content = Strings.Get("SettingsClose");
@@ -53,18 +53,18 @@ public partial class SettingsWindow : Window
         LanguageChanged?.Invoke();
     }
 
-    private void AutostartCheck_Changed(object sender, RoutedEventArgs e)
+    private void AutostartToggle_Changed(object sender, RoutedEventArgs e)
     {
         if (_loading) return;
 
-        var wantEnabled = AutostartCheck.IsChecked == true;
+        var wantEnabled = AutostartToggle.IsChecked == true;
         if (!Autostart.TrySet(wantEnabled))
         {
             _loading = true;
-            AutostartCheck.IsChecked = !wantEnabled;
+            AutostartToggle.IsChecked = !wantEnabled;
             _loading = false;
             System.Windows.MessageBox.Show(this, Strings.Get("AutostartFailed"),
-                "SircleToSearch", MessageBoxButton.OK, MessageBoxImage.Error);
+                "SircleToSearch", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
         }
     }
 

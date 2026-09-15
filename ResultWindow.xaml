@@ -41,30 +41,10 @@
             <!-- WebView2 is a windowed control (its own HWND) — a WPF overlay can't draw
                  on top of it while it's visible (airspace). Collapsing it while loading is
                  what lets this M3-style spinner show instead of a blank/white flash. -->
-            <Border x:Name="LoadingOverlay" Grid.Row="1" Background="Transparent" CornerRadius="0,0,16,16"
-                    ClipToBounds="True">
-                <Grid>
-                    <!-- Periodically re-captured (see RunCaptureLoopAsync) while a search is
-                         in flight, so this tracks the real loading progress — WebView2 is a
-                         separate HWND, so true live blur-through isn't reachable from WPF,
-                         but polling a snapshot every so often is close enough. Empty on the
-                         very first search, since there's nothing to have captured yet. -->
-                    <Image x:Name="LoadingBackdrop" Stretch="UniformToFill">
-                        <Image.Effect>
-                            <BlurEffect Radius="10"/>
-                        </Image.Effect>
-                    </Image>
-                    <Border Background="#CCFFFFFF"/>
-
-                    <Ellipse Width="240" Height="240" Fill="#4285F4" Opacity="0.06">
-                        <Ellipse.Effect>
-                            <BlurEffect Radius="60"/>
-                        </Ellipse.Effect>
-                    </Ellipse>
-                    <Polygon x:Name="SpinnerShape" Fill="#4285F4"
-                             HorizontalAlignment="Center" VerticalAlignment="Center"
-                             Width="48" Height="48"/>
-                </Grid>
+            <Border x:Name="LoadingOverlay" Grid.Row="1" Background="White" CornerRadius="0,0,16,16">
+                <Polygon x:Name="SpinnerShape" Fill="#4285F4"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Width="48" Height="48"/>
             </Border>
         </Grid>
     </Border>
